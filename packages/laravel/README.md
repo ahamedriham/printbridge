@@ -2,7 +2,7 @@
 
 Laravel integration for [PrintBridge](https://github.com/ahamedriham/printbridge), the open-source local print bridge (QZ Tray alternative, no certificates). Build receipts and print jobs in PHP, print them silently from the browser.
 
-Requires PHP 8.1+, Laravel 10/11/12, and the PrintBridge desktop app on the client machine.
+Requires PHP 8.1+, Laravel 10–13 (CI-tested on 12 and 13), and the PrintBridge desktop app on the client machine.
 
 ## Install
 
