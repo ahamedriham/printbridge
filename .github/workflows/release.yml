@@ -73,7 +73,13 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run ${{ matrix.script }}
+      - name: Build installer
+        shell: bash
+        run: |
+          # An unset secret arrives as an empty string, which electron-builder
+          # treats as a certificate path. Drop it so unsigned builds work.
+          if [ -z "$CSC_LINK" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
+          npm run ${{ matrix.script }}
         env:
           # Optional code signing. Leave unset for unsigned builds.
           CSC_LINK: ${{ secrets.CSC_LINK }}
