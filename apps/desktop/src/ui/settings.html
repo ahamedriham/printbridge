@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<style>
+  body { font: 13px system-ui, sans-serif; margin: 0; padding: 16px; color: #222; background: #fafafa; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .muted { color: #777; font-size: 12px; }
+  section { background: #fff; border: 1px solid #e3e3e3; border-radius: 6px; padding: 12px; margin-top: 12px; }
+  h2 { font-size: 13px; margin: 0 0 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+  td.actions { text-align: right; white-space: nowrap; }
+  button { font: inherit; padding: 3px 9px; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
+  button:hover { background: #f3f3f3; }
+  input[type=text], select { font: inherit; padding: 4px 6px; border: 1px solid #bbb; border-radius: 4px; }
+  .row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+  .row input[type=text] { flex: 1; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 10px; background: #e6f4ea; color: #137333; }
+  .tag.block { background: #fce8e6; color: #c5221f; }
+  label { display: block; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <h1 id="title">PrintBridge</h1>
+  <div class="muted" id="status"></div>
+
+  <section>
+    <h2>Allowed websites</h2>
+    <div class="muted">Sites listed here can print and use devices silently, with no prompt.</div>
+    <table id="origins"></table>
+    <div class="row">
+      <input type="text" id="newOrigin" placeholder="https://pos.example.com">
+      <button id="addAllow">Allow</button>
+      <button id="addBlock">Block</button>
+    </div>
+    <label>Unknown websites:
+      <select id="policy">
+        <option value="prompt">Ask me (remember choice)</option>
+        <option value="allow">Allow all (locked-down POS only)</option>
+        <option value="deny">Block all</option>
+      </select>
+    </label>
+  </section>
+
+  <section>
+    <h2>Server</h2>
+    <label>ws port <input type="text" id="wsPort" size="6"> &nbsp; wss port <input type="text" id="wssPort" size="6">
+      &nbsp; <label style="display:inline"><input type="checkbox" id="enableWss"> enable wss (for https pages)</label></label>
+    <div class="row"><button id="save">Save &amp; restart server</button></div>
+  </section>
+
+  <section>
+    <h2>Printers</h2>
+    <div class="row"><select id="printers"></select><button id="test">Test print</button></div>
+    <div class="muted" id="log"></div>
+  </section>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let cfg;
+async function load() {
+  cfg = await bridge.getConfig();
+  document.title = cfg.appName + ' settings';
+  $('#title').textContent = cfg.appName + ' ' + cfg.version;
+  $('#status').textContent = cfg.status.running
+    ? `Running — ws://localhost:${cfg.wsPort}${cfg.enableWss ? ', wss://localhost:' + cfg.wssPort : ''} — ${cfg.status.clients} client(s)`
+    : 'Server not running';
+  $('#policy').value = cfg.unknownOriginPolicy;
+  $('#wsPort').value = cfg.wsPort; $('#wssPort').value = cfg.wssPort; $('#enableWss').checked = cfg.enableWss;
+  const t = $('#origins'); t.innerHTML = '';
+  const rows = [...cfg.allowedOrigins.map((o) => [o, 'allow']), ...cfg.blockedOrigins.map((o) => [o, 'block'])];
+  if (!rows.length) t.innerHTML = '<tr><td class="muted">No sites yet.</td></tr>';
+  for (const [o, kind] of rows) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${o} <span class="tag ${kind}">${kind === 'allow' ? 'allowed' : 'blocked'}</span></td>
+      <td class="actions">${kind === 'allow' ? '<button data-b="' + o + '">Block</button>' : '<button data-a="' + o + '">Allow</button>'} <button data-r="${o}">Remove</button></td>`;
+    t.appendChild(tr);
+  }
+  t.querySelectorAll('button').forEach((b) => b.onclick = async () => {
+    if (b.dataset.a) await bridge.allowOrigin(b.dataset.a);
+    if (b.dataset.b) await bridge.blockOrigin(b.dataset.b);
+    if (b.dataset.r) await bridge.removeOrigin(b.dataset.r);
+    load();
+  });
+  const ps = await bridge.listPrinters();
+  $('#printers').innerHTML = ps.map((p) => `<option ${p.isDefault ? 'selected' : ''}>${p.name}</option>`).join('');
+}
+function norm(v) { try { const u = new URL(v.trim()); return u.protocol + '//' + u.host; } catch { return v.trim(); } }
+$('#addAllow').onclick = async () => { const v = norm($('#newOrigin').value); if (v) { await bridge.allowOrigin(v); $('#newOrigin').value = ''; load(); } };
+$('#addBlock').onclick = async () => { const v = norm($('#newOrigin').value); if (v) { await bridge.blockOrigin(v); $('#newOrigin').value = ''; load(); } };
+$('#policy').onchange = async () => { await bridge.setConfig({ unknownOriginPolicy: $('#policy').value }); };
+$('#save').onclick = async () => {
+  await bridge.setConfig({ wsPort: +$('#wsPort').value, wssPort: +$('#wssPort').value, enableWss: $('#enableWss').checked });
+  await bridge.restart(); load();
+};
+$('#test').onclick = async () => { $('#log').textContent = 'Printing…'; try { await bridge.testPrint($('#printers').value); $('#log').textContent = 'Sent.'; } catch (e) { $('#log').textContent = 'Failed: ' + e.message; } };
+load();
+</script>
+</body>
+</html>

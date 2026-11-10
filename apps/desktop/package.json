@@ -1,0 +1,106 @@
+{
+  "name": "printbridge-desktop",
+  "productName": "PrintBridge",
+  "version": "1.0.0",
+  "description": "Open-source local print bridge: silent raw/ESC-POS, PDF and HTML printing plus serial/USB device access from the browser via a localhost WebSocket. No certificates or signing required.",
+  "main": "src/main.js",
+  "license": "MIT",
+  "author": "Ahamed",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --inspect",
+    "dist:win": "electron-builder --win --x64",
+    "dist:linux": "electron-builder --linux --x64",
+    "dist:mac": "electron-builder --mac",
+    "dist": "electron-builder --win --linux --x64"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.7.3",
+    "node-hid": "^3.1.0",
+    "pdf-to-printer": "^5.6.0",
+    "selfsigned": "^2.4.1",
+    "serialport": "^13.0.0",
+    "usb": "^2.14.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "io.printbridge.app",
+    "productName": "PrintBridge",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/@serialport/**",
+      "node_modules/usb/**",
+      "node_modules/node-hid/**",
+      "node_modules/pdf-to-printer/**",
+      "node_modules/node-gyp-build/**",
+      "node_modules/node-addon-api/**"
+    ],
+    "npmRebuild": false,
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "runAfterFinish": true,
+      "createDesktopShortcut": false,
+      "shortcutName": "PrintBridge"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Utility",
+      "maintainer": "ahamedriham@gmail.com",
+      "desktop": {
+        "entry": {
+          "Name": "PrintBridge",
+          "Comment": "Local print bridge for web apps"
+        }
+      },
+      "syncDesktopName": true
+    },
+    "publish": null,
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.utilities"
+    },
+    "executableName": "printbridge"
+  },
+  "homepage": "https://github.com/ahamedriham/printbridge",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ahamedriham/printbridge.git",
+    "directory": "apps/desktop"
+  },
+  "desktopName": "printbridge.desktop",
+  "private": true
+}

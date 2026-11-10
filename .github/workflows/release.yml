@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  installers:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist:win
+          - os: ubuntu-latest
+            script: dist:linux
+          - os: macos-latest
+            script: dist:mac
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run ${{ matrix.script }}
+        env:
+          # Optional code signing. Leave unset for unsigned builds.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Attach to GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/*.AppImage
+            apps/desktop/dist/*.deb
+            apps/desktop/dist/*.dmg
+          generate_release_notes: true
+
+  npm:
+    name: Publish printbridge-client to npm
+    runs-on: ubuntu-latest
+    if: ${{ vars.NPM_PUBLISH == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm test
+      - run: npm publish --access public --workspace packages/client-js
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  packagist-split:
+    name: Push Laravel subtree for Packagist
+    runs-on: ubuntu-latest
+    if: ${{ vars.LARAVEL_SPLIT_REPO != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Split and push
+        env:
+          DEPLOY_KEY: ${{ secrets.LARAVEL_SPLIT_DEPLOY_KEY }}
+          SPLIT_REPO: ${{ vars.LARAVEL_SPLIT_REPO }}   # e.g. git@github.com:ahamedriham/printbridge-laravel.git
+        run: |
+          mkdir -p ~/.ssh && echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git config user.name "github-actions" && git config user.email "actions@github.com"
+          SHA=$(git subtree split --prefix=packages/laravel)
+          git push --force "$SPLIT_REPO" "$SHA:refs/heads/main"
+          git push --force "$SPLIT_REPO" "$SHA:refs/tags/${GITHUB_REF_NAME}"
+

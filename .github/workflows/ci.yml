@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  js:
+    name: JS client tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Client copies in sync
+        run: |
+          npm run sync:client
+          git diff --exit-code -- packages/laravel/resources/js examples/printbridge.js
+
+  php:
+    name: Laravel package (PHP ${{ matrix.php }}, Laravel ${{ matrix.laravel }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3']
+        laravel: ['10.*', '11.*', '12.*']
+        exclude:
+          - php: '8.2'
+            laravel: '12.*'
+    defaults:
+      run:
+        working-directory: packages/laravel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - run: composer require "illuminate/support:${{ matrix.laravel }}" "illuminate/view:${{ matrix.laravel }}" --no-interaction --no-update
+      - run: composer update --prefer-dist --no-interaction --no-progress
+      - run: vendor/bin/phpunit
+
+  desktop-smoke:
+    name: Desktop app starts (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Boot app under Xvfb and hit the health endpoint
+        run: |
+          mkdir -p ~/.config/PrintBridge
+          echo '{"allowedOrigins":["http://localhost"]}' > ~/.config/PrintBridge/config.json
+          cd apps/desktop
+          xvfb-run -a npx electron --no-sandbox . > app.log 2>&1 &
+          sleep 10
+          curl -sf http://127.0.0.1:8182/ | grep printbridge
+          cat app.log | grep -v bus.cc || true
+

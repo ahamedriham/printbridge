@@ -1,0 +1,24 @@
+{
+  "name": "printbridge-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PrintBridge — open-source local print bridge for web apps (QZ Tray alternative, no certificates).",
+  "license": "MIT",
+  "workspaces": [
+    "apps/desktop",
+    "packages/client-js"
+  ],
+  "scripts": {
+    "start": "npm --workspace apps/desktop run start",
+    "build:client": "npm --workspace packages/client-js run build",
+    "sync:client": "node scripts/sync-client.js",
+    "dist:win": "npm run sync:client && npm --workspace apps/desktop run dist:win",
+    "dist:linux": "npm run sync:client && npm --workspace apps/desktop run dist:linux",
+    "dist:mac": "npm run sync:client && npm --workspace apps/desktop run dist:mac",
+    "test": "npm --workspace packages/client-js run test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ahamedriham/printbridge.git"
+  }
+}
