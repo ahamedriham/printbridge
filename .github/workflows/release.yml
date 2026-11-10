@@ -1,7 +1,13 @@
 name: Release
 
+# Runs when:
+#  - a v* tag is pushed, or
+#  - a commit pushed to main has "[release]" in its message
+#    (tag = "v" + version in package.json), or
+#  - started manually from the Actions tab.
 on:
   push:
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
     inputs:
@@ -13,18 +19,32 @@ on:
 permissions:
   contents: write
 
-env:
-  TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-
 jobs:
   release:
-    name: Create release ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    name: Create release
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/') ||
+      contains(github.event.head_commit.message, '[release]')
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Work out the tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then TAG="$INPUT_TAG"
+          elif [ "$GITHUB_REF_TYPE" = tag ]; then TAG="$GITHUB_REF_NAME"
+          else TAG="v$(node -p "require('./package.json').version")"; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG"
       - name: Create GitHub release (and tag) if missing
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists"
@@ -62,7 +82,7 @@ jobs:
       - name: Attach to GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.TAG }}
+          tag_name: ${{ needs.release.outputs.tag }}
           files: |
             apps/desktop/dist/*.exe
             apps/desktop/dist/*.AppImage
@@ -99,6 +119,7 @@ jobs:
       - name: Split and push
         env:
           DEPLOY_KEY: ${{ secrets.LARAVEL_SPLIT_DEPLOY_KEY }}
+          TAG: ${{ needs.release.outputs.tag }}
           SPLIT_REPO: ${{ vars.LARAVEL_SPLIT_REPO }}   # e.g. git@github.com:ahamedriham/printbridge-laravel.git
         run: |
           mkdir -p ~/.ssh && echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
