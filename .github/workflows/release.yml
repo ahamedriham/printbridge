@@ -3,13 +3,38 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create from the selected branch (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
 
 permissions:
   contents: write
 
+env:
+  TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
 jobs:
+  release:
+    name: Create release ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub release (and tag) if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "PrintBridge ${TAG#v}" --generate-notes
+          fi
+
   installers:
     name: Build ${{ matrix.os }}
+    needs: release
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -37,6 +62,7 @@ jobs:
       - name: Attach to GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG }}
           files: |
             apps/desktop/dist/*.exe
             apps/desktop/dist/*.AppImage
@@ -46,6 +72,7 @@ jobs:
 
   npm:
     name: Publish printbridge-client to npm
+    needs: release
     runs-on: ubuntu-latest
     if: ${{ vars.NPM_PUBLISH == 'true' }}
     steps:
@@ -62,6 +89,7 @@ jobs:
 
   packagist-split:
     name: Push Laravel subtree for Packagist
+    needs: release
     runs-on: ubuntu-latest
     if: ${{ vars.LARAVEL_SPLIT_REPO != '' }}
     steps:
@@ -78,5 +106,5 @@ jobs:
           git config user.name "github-actions" && git config user.email "actions@github.com"
           SHA=$(git subtree split --prefix=packages/laravel)
           git push --force "$SPLIT_REPO" "$SHA:refs/heads/main"
-          git push --force "$SPLIT_REPO" "$SHA:refs/tags/${GITHUB_REF_NAME}"
+          git push --force "$SPLIT_REPO" "$SHA:refs/tags/${TAG}"
 
